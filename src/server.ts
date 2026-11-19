@@ -53,7 +53,7 @@ app.post("/", async (req: RawBodyRequest, res: Response) => {
   try {
     let responsePayload: unknown;
 
-    if (!payload || typeof payload !== "object" || payload.type === "preflight" || payload.type === "ping" || (!payload.matchId && !payload.proof && !payload.policy && !payload.task)) { const { rawJson, signature } = signPayload({ ok: true, status: "ready", agent: "zkverify-dual-tournament-agent" }, HMAC_SECRET); res.status(200).setHeader("content-type", "application/json").setHeader("x-agent-signature", signature).setHeader("x-signature", signature).send(rawJson); return; }
+    const ts = req.header("x-agent-games-timestamp") ?? String(Math.floor(Date.now() / 1000)); if (!payload || typeof payload !== "object" || payload.type === "preflight" || payload.preflight || (!payload.matchId && !payload.proof && !payload.policy && !payload.task)) { const bodyObj = { ok: true, protocolVersion: "v1" }; const rawJson = JSON.stringify(bodyObj); const sig = require("crypto").createHmac("sha256", HMAC_SECRET).update(`${ts}.${rawJson}`, "utf8").digest("hex"); res.status(200).setHeader("content-type", "application/json").setHeader("x-agent-games-signature", sig).setHeader("x-agent-games-timestamp", ts).send(rawJson); return; }
     // Deteksi otomatis apakah tugas yang masuk adalah Steal the VFY atau Proof Gatekeeper
     if (
       payload &&
@@ -65,14 +65,7 @@ app.post("/", async (req: RawBodyRequest, res: Response) => {
       responsePayload = await handleGatekeeperTask(payload as unknown as GatekeeperTask);
     }
 
-    const { rawJson, signature } = signPayload(responsePayload, HMAC_SECRET);
-
-    res
-      .status(200)
-      .setHeader("content-type", "application/json")
-      .setHeader("x-agent-signature", signature)
-      .setHeader("x-signature", signature)
-      .send(rawJson);
+    const fullResp = { ok: true, protocolVersion: "v1", ...(typeof responsePayload === "object" && responsePayload !== null ? responsePayload : { output: responsePayload }) }; const rawJson = JSON.stringify(fullResp); const signature = require("crypto").createHmac("sha256", HMAC_SECRET).update(`${ts}.${rawJson}`, "utf8").digest("hex"); res.status(200).setHeader("content-type", "application/json").setHeader("x-agent-games-signature", signature).setHeader("x-agent-games-timestamp", ts).setHeader("x-agent-signature", signature).send(rawJson);
   } catch (err) {
     console.error("[Server] Unhandled request error:", err instanceof Error ? err.message : "unknown");
     res.status(500).json({ error: "INTERNAL_AGENT_ERROR" });
