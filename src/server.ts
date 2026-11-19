@@ -17,25 +17,21 @@ function getSig(req: Request): string | undefined {
   return undefined;
 }
 
-function sendSignedV1(res: Response, bodyObj: Record<string, unknown>, reqTs?: string) {
-  const ts = reqTs || String(Math.floor(Date.now() / 1000));
-  const payload = { ok: true, protocolVersion: "v1", ...bodyObj };
+function sendSignedV1(res: Response, payload: Record<string, unknown>, reqTs?: string) {
   const rawJson = JSON.stringify(payload);
-  const sig = crypto.createHmac("sha256", HMAC_SECRET).update(`${ts}.${rawJson}`, "utf8").digest("hex");
-  res.status(200)
-    .setHeader("content-type", "application/json")
-    .setHeader("x-agent-games-signature", sig)
-    .setHeader("x-agent-games-timestamp", ts)
-    .setHeader("x-agent-signature", sig)
-    .send(rawJson);
+  const msg = reqTs ? `${reqTs}.${rawJson}` : rawJson;
+  const sig = crypto.createHmac("sha256", HMAC_SECRET).update(msg, "utf8").digest("hex");
+  res.status(200).setHeader("content-type", "application/json").setHeader("x-agent-games-signature", sig);
+  if (reqTs) res.setHeader("x-agent-games-timestamp", reqTs);
+  res.send(rawJson);
 }
 
 app.get("/health", (_req: Request, res: Response) => {
-  res.status(200).json({ ok: true, protocolVersion: "v1", status: "ok" });
+  res.status(200).json({ ok: true, protocolVersion: "v1" });
 });
 
 app.get("/", (_req: Request, res: Response) => {
-  sendSignedV1(res, { status: "ready", agent: "zkverify-dual-tournament-agent" });
+  sendSignedV1(res, { ok: true, protocolVersion: "v1" });
 });
 
 app.post(["/", "/agent", "/webhook"], async (req: any, res: Response) => {
@@ -51,7 +47,7 @@ app.post(["/", "/agent", "/webhook"], async (req: any, res: Response) => {
 
     const payload = req.body;
     if (!payload || typeof payload !== "object" || payload.type === "preflight" || payload.preflight || (!payload.matchId && !payload.proof && !payload.policy && !payload.task)) {
-      sendSignedV1(res, { status: "ready" }, reqTs);
+      sendSignedV1(res, { ok: true, protocolVersion: "v1" }, reqTs);
       return;
     }
 
@@ -62,7 +58,8 @@ app.post(["/", "/agent", "/webhook"], async (req: any, res: Response) => {
       result = await handleGatekeeperTask(payload as GatekeeperTask);
     }
 
-    sendSignedV1(res, typeof result === "object" && result !== null ? result : { output: result }, reqTs);
+    const out = typeof result === "object" && result !== null ? { ok: true, protocolVersion: "v1", ...result } : { ok: true, protocolVersion: "v1", output: result };
+    sendSignedV1(res, out, reqTs);
   } catch (err) {
     console.error("[Server] Error:", err instanceof Error ? err.message : err);
     res.status(500).json({ error: "INTERNAL_AGENT_ERROR" });
