@@ -22,14 +22,7 @@ app.use(
   })
 );
 
-function getSignatureHeader(req: Request): string | undefined {
-  return (
-    req.header("x-agent-signature") ??
-    req.header("x-signature") ??
-    req.header("x-hub-signature-256") ??
-    undefined
-  );
-}
+function getSignatureHeader(req: Request): string | undefined { for (const [k, v] of Object.entries(req.headers)) { if (k.toLowerCase().includes("signature") && typeof v === "string" && v.trim()) return v.trim(); } return undefined; }
 
 // Health check untuk Render & pengecekan cepat
 app.get("/health", (_req: Request, res: Response) => {
@@ -50,7 +43,7 @@ app.post("/", async (req: RawBodyRequest, res: Response) => {
   const rawBody = req.rawBody ?? Buffer.from(JSON.stringify(req.body ?? {}));
   const sigHeader = getSignatureHeader(req);
 
-  if (!verifyHmacSignature(rawBody, sigHeader, HMAC_SECRET)) {
+  if (!verifyHmacSignature(rawBody, sigHeader, HMAC_SECRET, (req.header("x-zkverify-timestamp") ?? req.header("x-timestamp") ?? req.header("x-agent-timestamp")))) {
     res.status(401).json({ error: "INVALID_HMAC_SIGNATURE" });
     return;
   }
