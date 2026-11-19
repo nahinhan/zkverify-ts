@@ -53,6 +53,7 @@ app.post("/", async (req: RawBodyRequest, res: Response) => {
   try {
     let responsePayload: unknown;
 
+    if (!payload || typeof payload !== "object" || payload.type === "preflight" || payload.type === "ping" || (!payload.matchId && !payload.proof && !payload.policy && !payload.task)) { const { rawJson, signature } = signPayload({ ok: true, status: "ready", agent: "zkverify-dual-tournament-agent" }, HMAC_SECRET); res.status(200).setHeader("content-type", "application/json").setHeader("x-agent-signature", signature).setHeader("x-signature", signature).send(rawJson); return; }
     // Deteksi otomatis apakah tugas yang masuk adalah Steal the VFY atau Proof Gatekeeper
     if (
       payload &&
